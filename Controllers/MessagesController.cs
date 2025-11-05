@@ -87,5 +87,49 @@ namespace RealTimeChatApp.Controllers
 
             return Results.Ok(messages);
         }
+
+        [HttpPut("messages/{messageId}")]
+        public async Task<IResult> EditMessage(int messageId, [FromBody] string content)
+        { 
+            if (messageId <= 0 ||  content == null) { return Results.BadRequest("Сообщение пусто или передан неверный Id"); }
+
+
+            var userId = User.GetUserId();
+
+            var message = await _context.Messages.FindAsync(messageId);
+
+            if (message == null) { return Results.NotFound("Сообщение не найдено."); }
+
+            if (message.UserId != userId) { return Results.Forbid(); }
+
+            message.Content = content;
+            await _context.SaveChangesAsync();
+
+            return Results.NoContent();
+        }
+
+        [HttpDelete("messages/{messageId}")]
+        public async Task<IResult> DeleteMessage (int messageId)
+        {
+            if (messageId <= 0) { return Results.BadRequest("Передан неверный Id"); }
+
+            var userId = User.GetUserId();
+
+            var message = await _context.Messages.FindAsync(messageId);
+
+            if (message == null) { return Results.NotFound("Сообщение не найдено."); }
+
+            var isRoomOwner = await _context.RoomUsers.AnyAsync(ru => ru.RoomId == message.RoomId && ru.UserId == userId && ru.Role == "owner");
+
+            if (message.UserId != userId && !isRoomOwner) { return Results.Forbid(); }
+
+            _context.Messages.Remove(message);
+            await _context.SaveChangesAsync();
+
+            return Results.NoContent();
+
+        }
+
+        
     }
 }

@@ -3,10 +3,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RealTimeChatApp.Data;
 using RealTimeChatApp.DTOs;
+using RealTimeChatApp.Extensions;
 using RealTimeChatApp.Hubs;
+using RealTimeChatApp.Models;
 using RealTimeChatApp.Services;
 using Scalar.AspNetCore;
+using System.Security.Claims;
 using System.Text;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -61,20 +65,27 @@ app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
 
 
-app.MapGet("/users/search/{userName}", async (string userName, ChatDbContext _context) =>
-{
-    if (string.IsNullOrEmpty(userName))
-        return Results.BadRequest("Имя пользователя не может быть пустым.");
+app.MapGet("/users/search/{userName}", UserHandler.GetUserId); 
 
-    var users = await _context.Users
+app.Run();
+
+public static class UserHandler
+{
+    
+
+    public static async Task<IResult> GetUserId (string userName, ChatDbContext _context)
+    {
+        if (string.IsNullOrEmpty(userName))
+            return Results.BadRequest("Имя пользователя не может быть пустым.");
+
+        var users = await _context.Users
         .Where(u => u.UserName != null && u.UserName.Contains(userName))
         .Select(u => new UserSearchResult(u.Id, u.UserName, u.AvatarUrl))
         .ToListAsync();
 
-    return users.Any() ? Results.Ok(users) : Results.NotFound("Пользователь не найден");
-}).RequireAuthorization();
+        return users.Any() ? Results.Ok(users) : Results.NotFound("Пользователь не найден");
 
-
-app.Run();
+    }
+}
 
 

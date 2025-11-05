@@ -5,6 +5,7 @@ using RealTimeChatApp.Data;
 using RealTimeChatApp.DTOs;
 using RealTimeChatApp.Models;
 using RealTimeChatApp.Extensions;
+using Microsoft.OpenApi.Validations;
 
 namespace RealTimeChatApp.Controllers
 {
@@ -138,7 +139,7 @@ namespace RealTimeChatApp.Controllers
                 .Include(ru => ru.User)
                 .Select(ru => new
                 {
-                    UserId = userId,
+                    UserId = ru.UserId,
                     Username = ru.User.UserName,
                     Role = ru.Role,
                     JoinedAt = ru.JoinedAt,
@@ -152,6 +153,105 @@ namespace RealTimeChatApp.Controllers
             }
 
             return Results.NotFound("Пользователи комнаты не найдены");
+        }
+
+        [HttpDelete("{roomId}/users/{userIdToRemove}")]
+        public async Task<IResult> RemoveUserFromRoom (int roomId, int userIdToRemove)
+        {
+            if (roomId <= 0 || userIdToRemove <= 0)
+            {
+                return Results.NotFound();
+            }
+
+            var currentUser = User.GetUserId();
+
+            var isOwner = await _context.RoomUsers.AnyAsync(ru => ru.RoomId == roomId && ru.UserId == currentUser && ru.Role == "owner");
+
+            if (!isOwner) { return Results.Forbid(); }
+
+            var roomUser = await _context.RoomUsers.FirstOrDefaultAsync(ru => ru.RoomId == roomId && ru.UserId == userIdToRemove);
+
+            if (roomUser == null) { Results.NotFound("Пользователь не найден в комнате."); }
+
+            _context.RoomUsers.Remove(roomUser);
+            await _context.SaveChangesAsync();
+
+            return Results.NoContent();
+        }
+
+        [HttpDelete("leave/{roomId}")]  // ТУТ ВОПРОС!
+        public async Task<IResult> LeaveRoom (int roomId)
+        {
+            if (roomId <= 0) { return Results.BadRequest("Передан неверный Id"); }
+
+            var userId = User.GetUserId();
+
+            var roomUser = await _context.RoomUsers.FirstOrDefaultAsync(ru => ru.RoomId == roomId && ru.UserId == userId);
+
+            if (roomUser == null) { return Results.NotFound("Вы не состоите в этой комнате"); }
+
+            if (roomUser.Role == "owner")
+            {
+                int roomUserId = roomUser.Id;
+
+                var newOwner = await _context.RoomUsers
+                    .Where(ru => ru.RoomId == roomId && ru.UserId != roomUserId  ) //userId
+                    .OrderBy(ru => ru.JoinedAt)
+                    .FirstOrDefaultAsync();
+
+                if (newOwner != null)
+                {
+                    // Тут сомнение!
+                   
+                    newOwner.Role = "owner";
+                    _context.RoomUsers.Remove(roomUser);
+                    await _context.SaveChangesAsync();
+                    
+                }
+
+                else
+                {
+                    var room = await _context.Rooms.FindAsync(roomId);
+                    if (room != null)
+                    {
+                        _context.Rooms.Remove(room);
+                        // удалить пользователя
+                        // _context.RoomUsers.Remove(roomUser)
+
+                        await _context.SaveChangesAsync();
+                        return Results.NoContent();
+                    }
+                }
+            }
+
+            _context.RoomUsers.Remove(roomUser);
+            await _context.SaveChangesAsync();
+
+            return Results.NoContent();
+
+            
+        }
+
+        [HttpDelete("{roomId}")]
+        public async Task<IResult> DeleteRoom (int roomId)
+        {
+            if (roomId <= 0) { return Results.BadRequest("Передан неверный Id"); }
+
+            var userId = User.GetUserId();
+
+            var isOwner = await _context.RoomUsers
+                .AnyAsync(ru => ru.RoomId == roomId && ru.UserId == userId && ru.Role == "owner");
+
+            if (!isOwner) { return Results.Forbid(); }
+
+            var room = await _context.Rooms.FindAsync(roomId);
+            if (room == null) { Results.NotFound("Комната не найдена."); }
+
+            _context.Rooms.Remove(room);
+            await _context.SaveChangesAsync();
+
+            return Results.NoContent();
+
         }
 
 
