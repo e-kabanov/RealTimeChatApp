@@ -71,8 +71,6 @@ app.Run();
 
 public static class UserHandler
 {
-    
-
     public static async Task<IResult> GetUserId (string userName, ChatDbContext _context)
     {
         if (string.IsNullOrEmpty(userName))

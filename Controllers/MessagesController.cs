@@ -1,10 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Client;
 using RealTimeChatApp.Data;
 using RealTimeChatApp.DTOs;
 using RealTimeChatApp.Extensions;
+using RealTimeChatApp.Hubs;
 using RealTimeChatApp.Models;
 
 namespace RealTimeChatApp.Controllers
@@ -15,14 +18,16 @@ namespace RealTimeChatApp.Controllers
     public class MessagesController : ControllerBase
     {
         private readonly ChatDbContext _context;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public MessagesController(ChatDbContext context)
+        public MessagesController(ChatDbContext context, IHubContext<ChatHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         [HttpPost]
-        public async Task<IResult> SendMessage(SendMessageDto dto)
+        public async Task<IResult> SendMessage(SendMessageDto dto) // добавлен signal r
         {
             var userId = User.GetUserId();
 
@@ -47,6 +52,21 @@ namespace RealTimeChatApp.Controllers
 
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();
+
+            // уведомление о новом сообщении
+
+            await _hubContext.Clients.Group($"room_{dto.RoomId}").SendAsync("ReceiveMessage", new 
+            {
+                id = message.Id,
+                userId = message.UserId,
+                userName = message.User?.UserName ?? "Unknown",
+                content = message.Content,
+                timeStamp = message.TimeStamp,
+                avatarUrl = message.User?.AvatarUrl
+
+            });
+
+            
 
             return Results.Ok(message);
         }
@@ -85,11 +105,16 @@ namespace RealTimeChatApp.Controllers
          })
          .ToListAsync();
 
-            return Results.Ok(messages);
+            if (messages.Any())
+            {
+                return Results.Ok(messages);
+            }
+
+            return Results.NotFound("Сообщения группы не найдены");
         }
 
-        [HttpPut("messages/{messageId}")]
-        public async Task<IResult> EditMessage(int messageId, [FromBody] string content)
+        [HttpPut("{messageId}")]
+        public async Task<IResult> EditMessage(int messageId, [FromBody] string content)  // добавлен signal r
         { 
             if (messageId <= 0 ||  content == null) { return Results.BadRequest("Сообщение пусто или передан неверный Id"); }
 
@@ -105,10 +130,13 @@ namespace RealTimeChatApp.Controllers
             message.Content = content;
             await _context.SaveChangesAsync();
 
+            // уведомляем о редактированном сообщении
+            await _hubContext.Clients.Group($"room_{message.RoomId}").SendAsync("MessageEdited", messageId, content);
+
             return Results.NoContent();
         }
 
-        [HttpDelete("messages/{messageId}")]
+        [HttpDelete("{messageId}")]
         public async Task<IResult> DeleteMessage (int messageId)
         {
             if (messageId <= 0) { return Results.BadRequest("Передан неверный Id"); }
@@ -123,8 +151,11 @@ namespace RealTimeChatApp.Controllers
 
             if (message.UserId != userId && !isRoomOwner) { return Results.Forbid(); }
 
+            var roomId = message.RoomId;
             _context.Messages.Remove(message);
             await _context.SaveChangesAsync();
+
+            await _hubContext.Clients.Group($"room_{roomId}").SendAsync("MessageDeleted", messageId);
 
             return Results.NoContent();
 
