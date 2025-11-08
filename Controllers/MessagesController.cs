@@ -53,6 +53,8 @@ namespace RealTimeChatApp.Controllers
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();
 
+        
+
             // уведомление о новом сообщении
 
             await _hubContext.Clients.Group($"room_{dto.RoomId}").SendAsync("ReceiveMessage", new 
