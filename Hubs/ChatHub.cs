@@ -5,9 +5,11 @@ using Microsoft.EntityFrameworkCore;
 using RealTimeChatApp.Data;
 using RealTimeChatApp.Extensions;
 using RealTimeChatApp.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace RealTimeChatApp.Hubs
 {
+    [Authorize]
     public class ChatHub : Hub
     {
         private readonly ChatDbContext _context;

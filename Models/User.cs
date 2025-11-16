@@ -13,6 +13,8 @@ namespace RealTimeChatApp.Models
         public DateTime LastSeen {  get; set; } = DateTime.UtcNow;
         public bool IsOnline { get; set; }  
         public string? PasswordHash { get; set; }
+        [MaxLength(100)]
+        public string? Email { get; set; }
 
         public ICollection<RoomUser> RoomUsers { get; set; } = new List<RoomUser>();
         public ICollection<Message> Messages { get; set; } = new List<Message>();

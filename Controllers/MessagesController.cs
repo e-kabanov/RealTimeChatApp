@@ -53,7 +53,9 @@ namespace RealTimeChatApp.Controllers
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();
 
-        
+            var user = await _context.Users.FindAsync(userId);
+
+
 
             // уведомление о новом сообщении
 
@@ -64,13 +66,22 @@ namespace RealTimeChatApp.Controllers
                 userName = message.User?.UserName ?? "Unknown",
                 content = message.Content,
                 timeStamp = message.TimeStamp,
+                roomId = message.RoomId,
                 avatarUrl = message.User?.AvatarUrl
 
             });
 
-            
 
-            return Results.Ok(message);
+
+            return Results.Ok(new
+            {
+                id = message.Id,
+                userId = message.UserId,
+                roomId = message.RoomId,
+                content = message.Content,
+                timeStamp = message.TimeStamp,
+                userName = user?.UserName ?? "Unknown"
+            });
         }
 
         [HttpGet("room/{roomId}")]
