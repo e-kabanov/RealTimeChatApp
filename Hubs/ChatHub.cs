@@ -26,15 +26,15 @@ namespace RealTimeChatApp.Hubs
             var isUserInRoom = await _context.RoomUsers
                 .AnyAsync(ru => ru.RoomId == roomId && ru.UserId == userId);
 
-            if (!isUserInRoom) { return;  }
+            if (!isUserInRoom) { return; }
 
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"room_{roomId}" );
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"room_{roomId}");
 
             Console.WriteLine($"Пользователь {userId} присоединился к комнате {roomId}");
 
         }
 
-        public async Task UserTyping(int roomId, bool isTyping) 
+        public async Task UserTyping(int roomId, bool isTyping)
         {
             var userId = Context.User?.GetUserId();
 
@@ -49,7 +49,7 @@ namespace RealTimeChatApp.Hubs
 
         }
 
-        
+
 
         public override async Task OnConnectedAsync()
         {
@@ -73,7 +73,6 @@ namespace RealTimeChatApp.Hubs
                 await UpdateUserOnlineStatus(userId.Value, false);
             }
 
-            await base.OnDisconnectedAsync(exception);
         }
 
         private async Task UpdateUserOnlineStatus(int userId, bool isOnline)
@@ -86,7 +85,23 @@ namespace RealTimeChatApp.Hubs
                 user.LastSeen = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
+
+            await NotifyUserStatusChange(userId, user.UserName, user.IsOnline);
         }
-       
+
+        private async Task NotifyUserStatusChange(int userId, string userName, bool isOnline)
+        {
+            await Clients.All.SendAsync("UserOnlineStatusChanged", userId, isOnline, userName);
+
+            if (isOnline)
+            {
+                await Clients.All.SendAsync("UserWentOnline", userId, userName);
+            }
+            else
+            {
+                await Clients.All.SendAsync("UserWentOffline", userId, userName);
+            }
+
+        }
     }
 }

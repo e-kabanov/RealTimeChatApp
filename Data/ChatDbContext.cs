@@ -48,7 +48,7 @@ namespace RealTimeChatApp.Data
               .OnDelete(DeleteBehavior.NoAction);
 
 
-
+            
             base.OnModelCreating(modelBuilder);
         }
 
@@ -56,5 +56,6 @@ namespace RealTimeChatApp.Data
         public DbSet<Room> Rooms { get; set; }
         public DbSet<Message> Messages { get; set; }
         public DbSet<RoomUser> RoomUsers { get; set; }
+        
     }
 }

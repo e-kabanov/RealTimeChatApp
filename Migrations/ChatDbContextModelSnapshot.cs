@@ -22,6 +22,61 @@ namespace RealTimeChatApp.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("RealTimeChatApp.Models.DirectChat", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("User1Id")
+                        .HasColumnType("int");
+
+                    b.Property<int>("User2Id")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("User1Id");
+
+                    b.HasIndex("User2Id");
+
+                    b.ToTable("DirectChats");
+                });
+
+            modelBuilder.Entity("RealTimeChatApp.Models.DirectMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DirectChatId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SenderId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("TimeStamp")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DirectChatId");
+
+                    b.HasIndex("SenderId");
+
+                    b.ToTable("DirectMessages");
+                });
+
             modelBuilder.Entity("RealTimeChatApp.Models.Message", b =>
                 {
                     b.Property<int>("Id")
@@ -156,6 +211,44 @@ namespace RealTimeChatApp.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("RealTimeChatApp.Models.DirectChat", b =>
+                {
+                    b.HasOne("RealTimeChatApp.Models.User", "User1")
+                        .WithMany("DirectChatsAsUser1")
+                        .HasForeignKey("User1Id")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("RealTimeChatApp.Models.User", "User2")
+                        .WithMany("DirectChatsAsUser2")
+                        .HasForeignKey("User2Id")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("User1");
+
+                    b.Navigation("User2");
+                });
+
+            modelBuilder.Entity("RealTimeChatApp.Models.DirectMessage", b =>
+                {
+                    b.HasOne("RealTimeChatApp.Models.DirectChat", "DirectChat")
+                        .WithMany("DirectMessages")
+                        .HasForeignKey("DirectChatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RealTimeChatApp.Models.User", "Sender")
+                        .WithMany("DirectMessages")
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("DirectChat");
+
+                    b.Navigation("Sender");
+                });
+
             modelBuilder.Entity("RealTimeChatApp.Models.Message", b =>
                 {
                     b.HasOne("RealTimeChatApp.Models.Room", "Room")
@@ -205,6 +298,11 @@ namespace RealTimeChatApp.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("RealTimeChatApp.Models.DirectChat", b =>
+                {
+                    b.Navigation("DirectMessages");
+                });
+
             modelBuilder.Entity("RealTimeChatApp.Models.Room", b =>
                 {
                     b.Navigation("Messages");
@@ -215,6 +313,12 @@ namespace RealTimeChatApp.Migrations
             modelBuilder.Entity("RealTimeChatApp.Models.User", b =>
                 {
                     b.Navigation("CreatedRooms");
+
+                    b.Navigation("DirectChatsAsUser1");
+
+                    b.Navigation("DirectChatsAsUser2");
+
+                    b.Navigation("DirectMessages");
 
                     b.Navigation("Messages");
 

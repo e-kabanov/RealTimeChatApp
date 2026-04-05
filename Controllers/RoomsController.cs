@@ -78,11 +78,12 @@ namespace RealTimeChatApp.Controllers
 
             
 
+
             var roomUser = new RoomUser
             {
                 RoomId = room.Id,
                 UserId = userId,
-                Role = "owner",
+                Role = "Owner",
                 JoinedAt = DateTime.UtcNow
 
             };
@@ -103,8 +104,8 @@ namespace RealTimeChatApp.Controllers
 
         }
 
-        [HttpPost("{roomId}/users/{userId}")] // добавлен signal r
-        public async Task<IResult> AddUserToRoom (int roomId, int userId)
+        [HttpPost("{roomId}/users/{userId}")]
+        public async Task<IResult> AddUserToRoom(int roomId, int userId) // добавить возможность добавлять нескольких пользователей
         {
             var currentUser = User.GetUserId();
 
@@ -114,6 +115,20 @@ namespace RealTimeChatApp.Controllers
             if (!isOwner)
             {
                 return Results.Forbid();
+            }
+
+            var room = await _context.Rooms.FindAsync(roomId);
+
+            if (room == null)
+            {
+                return Results.NotFound("Комната не найдена.");
+            }
+
+            var currentParticipantCount = await _context.RoomUsers.CountAsync(ru => ru.RoomId == roomId);
+
+            if (currentParticipantCount >= room.MaxParticipants)
+            {
+                return Results.BadRequest("Достигнуто максимальное количество участников.");
             }
 
             var roomUser = new RoomUser
@@ -136,7 +151,7 @@ namespace RealTimeChatApp.Controllers
         }
 
         [HttpGet("{roomId}")]
-        public async Task<IResult> GetRoomUsers (int roomId)
+        public async Task<IResult> GetRoomUsers(int roomId)
         {
             if (roomId <= 0)
             {
@@ -175,7 +190,7 @@ namespace RealTimeChatApp.Controllers
         }
 
         [HttpDelete("{roomId}/users/{userIdToRemove}")] // добавлен signal r
-        public async Task<IResult> RemoveUserFromRoom (int roomId, int userIdToRemove)
+        public async Task<IResult> RemoveUserFromRoom(int roomId, int userIdToRemove)
         {
             if (roomId <= 0 || userIdToRemove <= 0)
             {
@@ -190,7 +205,7 @@ namespace RealTimeChatApp.Controllers
 
             var roomUser = await _context.RoomUsers.FirstOrDefaultAsync(ru => ru.RoomId == roomId && ru.UserId == userIdToRemove);
 
-            if (roomUser == null) {  return Results.NotFound("Пользователь не найден в комнате."); }
+            if (roomUser == null) { return Results.NotFound("Пользователь не найден в комнате."); }
 
             _context.RoomUsers.Remove(roomUser);
             await _context.SaveChangesAsync();
@@ -201,12 +216,12 @@ namespace RealTimeChatApp.Controllers
             var removedUser = await _context.Users.FindAsync(userIdToRemove);
             await _hubContext.Clients.Group($"room_{roomId}").SendAsync("UserLeft", removedUser?.UserName ?? "Unknown", DateTime.UtcNow);
 
-           
+
             return Results.NoContent();
         }
 
         [HttpDelete("leave/{roomId}")]  // добавлен signal r
-        public async Task<IResult> LeaveRoom (int roomId)
+        public async Task<IResult> LeaveRoom(int roomId)
         {
             if (roomId <= 0) { return Results.BadRequest("Передан неверный Id"); }
 
@@ -217,10 +232,10 @@ namespace RealTimeChatApp.Controllers
             if (roomUser == null) { return Results.NotFound("Вы не состоите в этой комнате"); }
 
             if (roomUser.Role == "owner")
-            {        
+            {
 
                 var newOwner = await _context.RoomUsers
-                    .Where(ru => ru.RoomId == roomId && ru.UserId != roomUser.UserId) 
+                    .Where(ru => ru.RoomId == roomId && ru.UserId != roomUser.UserId)
                     .OrderBy(ru => ru.JoinedAt)
                     .FirstOrDefaultAsync();
 
@@ -228,8 +243,8 @@ namespace RealTimeChatApp.Controllers
 
                 if (newOwner != null)
                 {
-                    
-                   // тут
+
+                    // тут
                     newOwner.Role = "owner";
                     _context.RoomUsers.Remove(roomUser);
                     await _context.SaveChangesAsync();
@@ -241,7 +256,7 @@ namespace RealTimeChatApp.Controllers
 
 
                     return Results.NoContent();
-                    
+
                 }
 
                 else
@@ -250,7 +265,7 @@ namespace RealTimeChatApp.Controllers
                     if (room != null)
                     {
                         _context.Rooms.Remove(room);
-                     
+
                         await _context.SaveChangesAsync();
                         return Results.NoContent();
                     }
@@ -267,20 +282,20 @@ namespace RealTimeChatApp.Controllers
 
             return Results.NoContent();
 
-            
+
         }
 
         [HttpDelete("{roomId}")]
-        public async Task<IResult> DeleteRoom (int roomId)
+        public async Task<IResult> DeleteRoom(int roomId)
         {
             if (roomId <= 0) { return Results.BadRequest("Передан неверный Id"); }
 
             var userId = User.GetUserId();
 
-            var isOwner = await _context.RoomUsers
-                .AnyAsync(ru => ru.RoomId == roomId && ru.UserId == userId && ru.Role == "owner");
+            //var isOwner = await _context.RoomUsers
+            //    .AnyAsync(ru => ru.RoomId == roomId && ru.UserId == userId && ru.Role == "owner");
 
-            if (!isOwner) { return Results.Forbid(); }
+            //if (!isOwner) { return Results.Forbid(); }
 
             var room = await _context.Rooms.FindAsync(roomId);
             if (room == null) { Results.NotFound("Комната не найдена."); }
@@ -329,48 +344,71 @@ namespace RealTimeChatApp.Controllers
 
             if (roomInfo == null)
             {
-                return Results.NotFound("Комната не найдена");
+                return Results.NotFound("Информация о комнате не найдена.");
             }
 
             return Results.Ok(roomInfo);
         }
 
-        [HttpGet("{roomId}/participants")]
-        public async Task<IResult> GetRoomParticipants(int roomId)
+
+        [HttpPost("direct/{targetUserId}")]
+        public async Task<IResult> CreateDirectChat(int targetUserId)
         {
-            if (roomId <= 0)
+            var currentUserId = User.GetUserId();
+
+            if (currentUserId == targetUserId) { return Results.BadRequest("Нельзя создать чат с самим собой"); }
+
+            var existingChat = await _context.Rooms
+        .Where(r => r.IsPrivate && r.MaxParticipants == 2)
+        .Where(r => r.RoomUsers.Count(ru => ru.UserId == currentUserId || ru.UserId == targetUserId) == 2)
+        .FirstOrDefaultAsync();
+
+            if (existingChat != null)
             {
-                return Results.BadRequest("Неверный Id комнаты");
-            }
-
-            var userId = User.GetUserId();
-
-            // Проверяем, что пользователь состоит в комнате
-            var isUserInRoom = await _context.RoomUsers
-                .AnyAsync(ru => ru.RoomId == roomId && ru.UserId == userId);
-
-            if (!isUserInRoom)
-            {
-                return Results.Forbid();
-            }
-
-            var participants = await _context.RoomUsers
-                .Where(ru => ru.RoomId == roomId)
-                .Include(ru => ru.User)
-                .Select(ru => new RoomParticipantDto
+                return Results.Ok(new
                 {
-                    UserId = ru.UserId,
-                    UserName = ru.User.UserName ?? "Unknown",
-                    Role = ru.Role,
-                    IsOnline = ru.User.IsOnline,
-                    AvatarUrl = ru.User.AvatarUrl
-                })
-                .OrderByDescending(p => p.Role == "owner")
-                .ThenBy(p => p.UserName)
-                .ToListAsync();
+                    id = existingChat.Id,
+                    name = existingChat.Name,
+                    isExisting = true
+                });
+            }
 
-            return Results.Ok(participants);
+            var targetUser = await _context.Users.FindAsync(targetUserId);
+
+            if (targetUser == null) { return Results.NotFound("Пользователь не найден"); }
+
+            var room = new Room
+            {
+                Name = $"Чат с {targetUser.UserName}",
+                Description = "Личная переписка",
+                CreatedById = currentUserId,
+                CreatedAt = DateTime.UtcNow,
+                IsPrivate = true,
+                MaxParticipants = 2
+            };
+
+            _context.Rooms.Add(room);
+            await _context.SaveChangesAsync();
+
+            var roomUsers = new List<RoomUser>
+            {
+                new() { RoomId = room.Id, UserId = currentUserId, Role = "member", JoinedAt = DateTime.UtcNow },
+                new() { RoomId = room.Id, UserId = targetUserId, Role = "member", JoinedAt = DateTime.UtcNow }
+            };
+
+            _context.RoomUsers.AddRange(roomUsers);
+            await _context.SaveChangesAsync();
+
+            return Results.Ok(new
+            {
+                id = room.Id,
+                name = room.Name,
+                isExisting = false
+            });
+
+
         }
+        
 
 
     }

@@ -19,5 +19,7 @@ namespace RealTimeChatApp.Models
         public ICollection<RoomUser> RoomUsers { get; set; } = new List<RoomUser>();
         public ICollection<Message> Messages { get; set; } = new List<Message>();
         public ICollection<Room> CreatedRooms { get; set; } = new List<Room>();
+
+       
     }
 }

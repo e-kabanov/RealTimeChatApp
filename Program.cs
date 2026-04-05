@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using RealTimeChatApp.Data;
 using RealTimeChatApp.DTOs;
@@ -20,10 +22,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddDbContext<ChatDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnectionString")));
+
+
+var connectionString = builder.Configuration["ConnectionStrings:DefaultConnectionString"];
+builder.Services.AddDbContext<ChatDbContext>(options => options.UseSqlServer(connectionString));
+
 builder.Services.AddSignalR();
+builder.Logging.AddConsole();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+
+builder.Services.Configure<AppDisplaySettings>(builder.Configuration.GetSection("AppSettings"));
+
+//var settings = new AppDisplaySettings();
+//builder.Configuration.GetSection("AppSettings").Bind(settings);
+//builder.Services.AddSingleton(settings);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -96,7 +110,26 @@ app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
 
 
-app.MapGet("api/users/search/{userName}", UserHandler.GetUserId); 
+app.MapGet("api/users/search/{userName}", UserHandler.GetUserId).RequireAuthorization();
+app.MapGet("api/users/{id}", UserHandler.GetUserInfo).RequireAuthorization();
+
+
+app.MapGet("/settings", (IOptions<AppDisplaySettings> options) => 
+{
+    AppDisplaySettings settings = options.Value;
+
+    return settings;
+
+});
+
+//app.MapGet("/settings", (AppDisplaySettings settings) => settings);
+
+    
+
+
+
+
+
 
 app.Run();
 
@@ -115,6 +148,33 @@ public static class UserHandler
         return users.Any() ? Results.Ok(users) : Results.NotFound("Пользователь не найден");
 
     }
+
+    public static async Task<IResult> GetUserInfo(int id, ChatDbContext _context)
+    {
+        var user = await _context.Users.FindAsync(id);
+
+        if (user == null)
+        {
+            return Results.Problem(detail: "Пользователь не найден", statusCode: 404);
+
+        }
+
+        return Results.Ok(new
+        {
+            userName = user.UserName,
+            avatarUrl = user.AvatarUrl,
+            createdAt = user.createdAt,
+            email = user.Email
+        });
+    }
+
+       public record UserSearchResult(int Id, string UserName, string AvatarUrl);
+
 }
+
+ 
+
+
+
 
 
